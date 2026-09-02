@@ -14,6 +14,7 @@ export type LedgerAction =
   | 'fold'
   | 'trim'
   | 'keep'
+  | 'replay'
   | 'violation'
   | 'summary';
 
@@ -35,7 +36,10 @@ export interface LedgerSummary extends LedgerEntry {
   tokensBefore: number;
   tokensAfter: number;
   budgetTripped: boolean;
+  /** New moves decided this call. */
   moved: number;
+  /** Moves replayed from the standing plan. */
+  replayed: number;
   recalled: number;
   /** Deepest turn whose items are unchanged from the input, for cache reasoning. */
   prefixIntactToTurn: number;

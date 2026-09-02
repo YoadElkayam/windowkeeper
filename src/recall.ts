@@ -11,14 +11,19 @@ export const RECALL_TOOL_NAME = 'recall';
 export const recallToolDescription =
   'Read an item that windowkeeper moved out of the context window. Pass the archive id shown in a "[windowkeeper]" marker. Returns the verbatim content.';
 
-export const recallInputSchema = {
+export const recallInputSchema: {
+  type: 'object';
+  properties: { id: { type: 'string'; description: string } };
+  required: string[];
+  additionalProperties: false;
+} = {
   type: 'object',
   properties: {
     id: { type: 'string', description: 'Archive id from a [windowkeeper] marker' },
   },
   required: ['id'],
   additionalProperties: false,
-} as const;
+};
 
 /** Anthropic Messages tool definition. */
 export const recallToolAnthropic = {

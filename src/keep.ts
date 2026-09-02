@@ -7,6 +7,7 @@ import { protectedIds } from './protect.js';
 import type { ReducerContext } from './reducers/context.js';
 import { evict } from './reducers/evict.js';
 import { expire } from './reducers/expire.js';
+import { derivePlan, replay } from './reducers/replay.js';
 import { resurface } from './reducers/resurface.js';
 import { trim } from './reducers/trim.js';
 import { truncate } from './reducers/truncate.js';
@@ -50,10 +51,12 @@ export class InvariantError extends Error {
  *
  * 1. prepare: copy, dedupe, link tool results, count tokens
  * 2. archive every raw item
- * 3. resurface: deterministic recall when the last item is a fresh user message
+ * 3. resurface: deterministic recall, recorded per user message and replayed
  * 4. expire: TTL
- * 5. if over `budget.max - reserve`: truncate, evict, trim to `budget.target`
- * 6. check invariants; write the summary
+ * 5. replay the standing plan: same drops, stubs, and truncations as last time
+ * 6. only if the replayed window is over `budget.max - reserve`: re-plan by
+ *    truncating, evicting, and trimming to `budget.target`, and store the plan
+ * 7. check invariants; write the summary
  */
 export function keep(transcript: Item[], policyInput: PolicyInput | Policy = {}, options: KeepOptions = {}): KeepResult {
   const policy = resolvePolicy(policyInput);
@@ -83,6 +86,9 @@ export function keep(transcript: Item[], policyInput: PolicyInput | Policy = {},
   items = expire(items, ctx);
   const expiredAny = items !== beforeExpire;
 
+  const replayResult = replay(items, archive.getPlan(), ctx);
+  items = replayResult.items;
+
   const budgetTripped = totalTokens(items) > limit;
   if (budgetTripped) {
     items = truncate(items, ctx);
@@ -98,12 +104,14 @@ export function keep(transcript: Item[], policyInput: PolicyInput | Policy = {},
     }
   }
 
-  const violations = checkInvariants({ input, output: items, policy, archive, ledger: ledger.entries, budgetTripped, expiredAny });
+  const violations = checkInvariants({ input, output: items, policy, archive, ledger: ledger.entries, budgetTripped, expiredAny, replayed: replayResult.replayed });
   if (violations.length > 0) {
     if (options.strict) throw new InvariantError(violations);
     for (const v of violations) ledger.add({ rule: `invariant.${v.invariant}.${v.name}`, action: 'violation', detail: v.detail });
     items = input;
   }
+
+  if (budgetTripped || archive.getPlan()) archive.setPlan(derivePlan(input, items, ledger.call));
 
   const summary: LedgerSummary = {
     call: ledger.call,
@@ -113,6 +121,7 @@ export function keep(transcript: Item[], policyInput: PolicyInput | Policy = {},
     tokensAfter: totalTokens(items),
     budgetTripped,
     moved: ledger.moved,
+    replayed: replayResult.replayed.size,
     recalled: ledger.recalled,
     prefixIntactToTurn: prefixIntactToTurn(input, items),
     tokenizer: tokenizer.name,

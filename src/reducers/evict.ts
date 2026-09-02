@@ -56,13 +56,16 @@ export function evict(items: Item[], ctx: ReducerContext): Item[] {
 export function makeStub(item: ToolResultItem, ctx: ReducerContext, reason: 'evict' | 'expire'): StubItem {
   const tool = item.tool ?? 'tool';
   const why = reason === 'expire' ? 'expired from the window' : 'moved out of the window';
+  // Name the archived size, not the size of a possibly truncated copy, so the stub text
+  // is identical whether it was made fresh or replayed.
+  const fullTokens = ctx.archive.get(item.id)?.meta.tokens ?? item.meta.tokens;
   const stub: StubItem = {
     kind: 'stub',
     id: stubId(item.id),
     refs: [item.id],
     callId: item.callId,
     turn: item.turn,
-    text: `[windowkeeper] ${tool} result from turn ${item.turn} (${item.meta.tokens} tokens) ${why}; archived as ${item.id}. Use recall({ id: "${item.id}" }) to read it, or run the tool again.`,
+    text: `[windowkeeper] ${tool} result from turn ${item.turn} (${fullTokens} tokens) ${why}; archived as ${item.id}. Use recall({ id: "${item.id}" }) to read it, or run the tool again.`,
     meta: { tokens: 0, pinned: false, tags: [], source: reason },
   };
   if (item.tool) stub.tool = item.tool;

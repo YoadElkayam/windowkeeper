@@ -1,6 +1,6 @@
 {
   "name": "windowkeeper",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Lossless context management for AI agent harnesses. The archive is the truth, the window is a view, and the ledger says what moved where.",
   "license": "MIT",
   "repository": {
@@ -39,6 +39,14 @@
       "types": "./dist/adapters/anthropic.d.ts",
       "import": "./dist/adapters/anthropic.js"
     },
+    "./openai": {
+      "types": "./dist/adapters/openai.d.ts",
+      "import": "./dist/adapters/openai.js"
+    },
+    "./ai-sdk": {
+      "types": "./dist/adapters/ai-sdk.d.ts",
+      "import": "./dist/adapters/ai-sdk.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
@@ -54,12 +62,26 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench": "pnpm build && node bench/synth.mjs /tmp/windowkeeper-session.json && node bench/replay.mjs /tmp/windowkeeper-session.json",
     "clean": "rm -rf dist *.tsbuildinfo",
     "prepublishOnly": "pnpm clean && pnpm build && pnpm test"
   },
+  "peerDependencies": {
+    "@ai-sdk/provider": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/provider": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@ai-sdk/anthropic": "^4.0.48",
+    "@ai-sdk/provider": "4",
+    "@anthropic-ai/sdk": "^0.123.0",
     "@types/node": "^22.10.0",
+    "ai": "7",
     "fast-check": "^3.23.0",
+    "openai": "7",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

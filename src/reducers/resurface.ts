@@ -1,7 +1,8 @@
+import type { RecallRecord } from '../archive.js';
 import { recalledId, stubId } from '../ids.js';
 import { extractIdentifiers } from '../identifiers.js';
 import { countItem, sliceByTokens } from '../tokenizer.js';
-import { itemText, type Item, type RawItem, type RecalledItem } from '../types.js';
+import { itemText, type Item, type RawItem, type RecalledItem, type UserItem } from '../types.js';
 import type { ReducerContext } from './context.js';
 
 const SPECIFIC_KINDS = new Set(['path', 'file', 'code', 'quote', 'errcode', 'ref', 'uuid']);
@@ -10,101 +11,137 @@ const MAX_IDENTIFIERS_SCANNED = 24;
 /**
  * Deterministic proactive recall.
  *
- * Runs only when the last item is a fresh user message. Identifiers in that
- * message are matched against the archive. A match still in the window in full
- * is protected for this call so later reducers leave it alone. A match that is
- * currently a stub is rehydrated in place. A match not in the window at all is
- * appended after the user message as a recalled item, so the stable prefix is
- * untouched.
+ * When the last item is a fresh user message, identifiers in it are matched
+ * against the archive and the matches are recorded against that message. On
+ * this and every later call, the records for each user message still in the
+ * window are applied:
+ *
+ * - a match present in full is protected while its message is recent
+ * - a match that is a stub is rehydrated in place while its message is recent
+ * - a match absent from the window is inserted right after its message as a
+ *   recalled item, on every call, until trim removes it (which forgets it)
+ *
+ * Replaying the records is what keeps each window a pure extension of the
+ * previous one, so the prompt cache holds across re-surfacing.
  */
 export function resurface(items: Item[], ctx: ReducerContext): Item[] {
-  const { policy, archive, ledger, tokenizer } = ctx;
+  const { policy, archive, ledger, tokenizer, currentTurn, protectedIds } = ctx;
   if (!policy.resurface.identifiers || policy.resurface.maxItems === 0) return items;
-  const last = items[items.length - 1];
-  if (!last || last.kind !== 'user') return items;
 
-  const identifiers = extractIdentifiers(itemText(last)).filter(
-    (id) => SPECIFIC_KINDS.has(id.kind) || id.value.length >= 8,
-  );
-  if (identifiers.length === 0) return items;
-
-  const inWindow = new Set<string>();
+  const position = new Map<string, number>();
   const stubIndexByRef = new Map<string, number>();
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
-    inWindow.add(item.id);
+    position.set(item.id, i);
     if (item.kind === 'stub') for (const ref of item.refs) stubIndexByRef.set(ref, i);
-    if (item.kind === 'recalled') inWindow.add(item.ref);
   }
 
-  const out = [...items];
-  const appended: RecalledItem[] = [];
-  const used = new Set<string>();
-  let count = 0;
+  const last = items[items.length - 1];
+  const freshId = last && last.kind === 'user' && archive.recallsFor(last.id) === undefined ? last.id : undefined;
+  if (freshId && last?.kind === 'user') archive.rememberRecalls(freshId, matchIdentifiers(last, ctx, position));
 
-  for (const ident of identifiers.slice(0, MAX_IDENTIFIERS_SCANNED)) {
-    if (count >= policy.resurface.maxItems) break;
-    for (const match of archive.findByIdentifier(ident.value)) {
-      if (count >= policy.resurface.maxItems) break;
-      if (used.has(match.id) || match.id === last.id || match.kind === 'system') continue;
-      const stubIndex = stubIndexByRef.get(match.id);
-      if (stubIndex !== undefined) {
+  const out: Item[] = [...items];
+  const insertAfter = new Map<number, RecalledItem[]>();
+  const recentFrom = currentTurn - policy.protect.recentTurns + 1;
+
+  for (let i = 0; i < items.length; i++) {
+    const anchor = items[i]!;
+    if (anchor.kind !== 'user') continue;
+    const records = archive.recallsFor(anchor.id);
+    if (!records || records.length === 0) continue;
+    const fresh = anchor.id === freshId;
+    const recent = fresh || anchor.turn >= recentFrom;
+
+    for (const { ref, identifier } of records) {
+      const pos = position.get(ref);
+      if (pos !== undefined) {
+        if (recent && !protectedIds.has(ref)) {
+          protectedIds.add(ref);
+          if (fresh) {
+            ledger.add({
+              rule: 'resurface.identifiers',
+              action: 'keep',
+              item: ref,
+              refs: [ref],
+              detail: `"${identifier}" in latest user message matched turn ${items[pos]!.turn}; kept in full this call`,
+            });
+          }
+        }
+        continue;
+      }
+      const stubPos = stubIndexByRef.get(ref);
+      if (stubPos !== undefined) {
+        if (!recent) continue;
+        const match = archive.get(ref);
+        if (!match) continue;
         const restored = structuredClone(match) as RawItem;
         restored.meta.tokens = countItem(restored, tokenizer);
-        out[stubIndex] = restored;
-        used.add(match.id);
-        count++;
+        out[stubPos] = restored;
+        protectedIds.add(ref);
         ledger.add({
           rule: 'resurface.identifiers',
           action: 'rehydrate',
-          item: stubId(match.id),
-          refs: [match.id],
-          tokensBefore: items[stubIndex]!.meta.tokens,
+          item: stubId(ref),
+          refs: [ref],
+          tokensBefore: items[stubPos]!.meta.tokens,
           tokensAfter: restored.meta.tokens,
-          detail: `"${ident.value}" in latest user message matched turn ${match.turn}`,
+          detail: `"${identifier}" in user message at turn ${anchor.turn} matched turn ${match.turn}`,
         });
         continue;
       }
-      if (inWindow.has(match.id)) {
-        if (ctx.protectedIds.has(match.id)) continue;
-        ctx.protectedIds.add(match.id);
-        used.add(match.id);
-        count++;
+      const match = archive.get(ref);
+      if (!match) continue;
+      const recalled = renderRecalled(match, anchor, identifier, ctx);
+      const list = insertAfter.get(i) ?? [];
+      list.push(recalled);
+      insertAfter.set(i, list);
+      if (fresh) {
         ledger.add({
           rule: 'resurface.identifiers',
-          action: 'keep',
-          item: match.id,
-          refs: [match.id],
-          detail: `"${ident.value}" in latest user message matched turn ${match.turn}; kept in full this call`,
+          action: 'recall',
+          item: recalled.id,
+          refs: [ref],
+          tokensAfter: recalled.meta.tokens,
+          detail: `"${identifier}" in latest user message matched turn ${match.turn}`,
         });
-        continue;
       }
-      const recalled = renderRecalled(match, ident.value, ctx);
-      appended.push(recalled);
-      used.add(match.id);
-      count++;
-      ledger.add({
-        rule: 'resurface.identifiers',
-        action: 'recall',
-        item: recalled.id,
-        refs: [match.id],
-        tokensAfter: recalled.meta.tokens,
-        detail: `"${ident.value}" in latest user message matched turn ${match.turn}`,
-      });
     }
   }
 
-  return appended.length ? [...out, ...appended] : out;
+  if (insertAfter.size === 0) return out;
+  const result: Item[] = [];
+  for (let i = 0; i < out.length; i++) {
+    result.push(out[i]!);
+    const extra = insertAfter.get(i);
+    if (extra) result.push(...extra);
+  }
+  return result;
 }
 
-function renderRecalled(match: RawItem, identifier: string, ctx: ReducerContext): RecalledItem {
-  const { policy, tokenizer, currentTurn } = ctx;
-  const label =
-    match.kind === 'tool_result'
-      ? `${match.tool ?? 'tool'} result`
-      : match.kind === 'assistant'
-        ? 'assistant message'
-        : 'user message';
+/** Identifiers in a fresh user message, matched against the archive, capped by policy. */
+function matchIdentifiers(last: UserItem, ctx: ReducerContext, position: Map<string, number>): RecallRecord[] {
+  const { policy, archive } = ctx;
+  const identifiers = extractIdentifiers(itemText(last)).filter((id) => SPECIFIC_KINDS.has(id.kind) || id.value.length >= 8);
+  const records: RecallRecord[] = [];
+  const used = new Set<string>();
+  for (const ident of identifiers.slice(0, MAX_IDENTIFIERS_SCANNED)) {
+    if (records.length >= policy.resurface.maxItems) break;
+    for (const match of archive.findByIdentifier(ident.value)) {
+      if (records.length >= policy.resurface.maxItems) break;
+      if (used.has(match.id) || match.id === last.id || match.kind === 'system') continue;
+      // Skip matches that only appear after the message (a later call re-sending the same message).
+      const pos = position.get(match.id);
+      if (pos !== undefined && pos > (position.get(last.id) ?? Infinity)) continue;
+      used.add(match.id);
+      records.push({ ref: match.id, identifier: ident.value });
+    }
+  }
+  return records;
+}
+
+function renderRecalled(match: RawItem, anchor: UserItem, identifier: string, ctx: ReducerContext): RecalledItem {
+  const { policy, tokenizer } = ctx;
+  const label = match.kind === 'tool_result' ? `${match.tool ?? 'tool'} result` : match.kind === 'assistant' ? 'assistant message' : 'user message';
   const full = itemText(match);
   const budget = policy.resurface.maxTokensEach;
   const body =
@@ -114,10 +151,11 @@ function renderRecalled(match: RawItem, identifier: string, ctx: ReducerContext)
   const text = `[windowkeeper recalled ${label} from turn ${match.turn}, matched "${identifier}", archive id ${match.id}]\n${body}`;
   const item: RecalledItem = {
     kind: 'recalled',
-    id: recalledId(match.id),
+    id: recalledId(`${anchor.id}:${match.id}`),
     ref: match.id,
+    anchor: anchor.id,
     match: identifier,
-    turn: currentTurn,
+    turn: anchor.turn,
     text,
     meta: { tokens: 0, pinned: false, tags: [], source: 'resurface' },
   };

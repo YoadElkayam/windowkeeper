@@ -30,6 +30,8 @@ export interface Meta {
   source?: string;
   /** Set when a reducer truncated the content. The archive holds the full item. */
   truncated?: boolean;
+  /** Message-level provider options carried through adapters untouched. */
+  providerOptions?: unknown;
 }
 
 interface ItemBase {
@@ -60,8 +62,8 @@ export type StubItem = ItemBase & {
 };
 /** Summarizes a closed span. Written fresh, never from hindsight. Reserved for v0.2. */
 export type ViewItem = ItemBase & { kind: 'view'; covers: string[]; text: string; depth: number };
-/** An archived item brought back by re-surfacing, rendered as text. */
-export type RecalledItem = ItemBase & { kind: 'recalled'; ref: string; text: string; match: string };
+/** An archived item brought back by re-surfacing, rendered as text, anchored to the user item that mentioned it. */
+export type RecalledItem = ItemBase & { kind: 'recalled'; ref: string; anchor: string; text: string; match: string };
 
 export type Item =
   | SystemItem

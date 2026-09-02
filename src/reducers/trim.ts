@@ -24,6 +24,7 @@ export function trim(items: Item[], ctx: ReducerContext): Item[] {
     total -= unit.tokens;
     for (const i of unit.indices) {
       const it = items[i]!;
+      if (it.kind === 'recalled') ctx.archive.forgetRecall(it.anchor, it.ref);
       ledger.add({
         rule: 'budget.target',
         action: 'trim',

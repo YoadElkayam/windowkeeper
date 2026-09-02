@@ -25,10 +25,12 @@ seen. A **turn** is one model call.
    the same ledger.
 7. **Order and position preserved.** The window is a subsequence of the input,
    with stubs and views in the positions of what they replace. Recalled items
-   are appended after the latest user message.
+   sit right after the user message that mentioned them.
 8. **Pinned items are never removed or altered.**
-9. **Under budget means untouched.** If the budget did not trip and nothing
-   expired, the window equals the input, apart from re-surfacing. The prompt
+9. **Under budget means no new decisions.** If the budget did not trip and
+   nothing expired, every item is in the window in full unless its move is a
+   replay of the standing plan or a re-surfacing decision. Between re-plans each
+   window is the previous window plus what the harness appended, so the prompt
    cache prefix survives.
 10. **Every move is in the ledger** with a rule id, the ids involved, and the
     tokens it changed.

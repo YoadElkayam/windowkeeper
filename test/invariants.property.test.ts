@@ -13,11 +13,16 @@ describe('invariants (property)', () => {
   it('hold for generated transcripts and policies', () => {
     fc.assert(
       fc.property(transcriptArb, policyArb, (items, policy) => {
-        const archive = new MemoryArchive();
-        const a = keep(items, policy, { archive, strict: true, now: 5 });
-        const b = keep(items, policy, { archive, strict: true, now: 5 });
+        // Same input, policy, and archive state produce the same window and ledger.
+        const a = keep(items, policy, { archive: new MemoryArchive(), strict: true, now: 5 });
+        const b = keep(items, policy, { archive: new MemoryArchive(), strict: true, now: 5 });
         expect(JSON.stringify(a.window)).toBe(JSON.stringify(b.window));
         expect(JSON.stringify(a.ledger)).toBe(JSON.stringify(b.ledger));
+        // Re-running against the same archive keeps invariants and the same window.
+        const archive = new MemoryArchive();
+        const c = keep(items, policy, { archive, strict: true, now: 5 });
+        const d = keep(items, policy, { archive, strict: true, now: 5 });
+        expect(JSON.stringify(c.window)).toBe(JSON.stringify(d.window));
         // When the budget tripped and nothing was declared unshrinkable, the window is under the limit.
         if (a.summary.budgetTripped && !a.ledger.some((e) => e.rule === 'budget.unshrinkable')) {
           expect(a.summary.tokensAfter).toBeLessThanOrEqual(policy.budget.max - policy.budget.reserve);

@@ -87,7 +87,9 @@ describe('resurface', () => {
     // The harness sent the raw transcript, so the match was still in the window: it is kept in full, not evicted.
     expect(entry!.action).toBe('keep');
     expect(second.window.find((i) => i.id === original.id)?.kind).toBe('tool_result');
-    expect(second.ledger.some((e) => e.action === 'evict')).toBe(true);
+    // Nothing new was decided on the second call: the first call's plan was replayed around the kept item.
+    expect(second.ledger.some((e) => e.action === 'replay')).toBe(true);
+    expect(second.summary.budgetTripped).toBe(false);
   });
 
   it('appends a recalled item for an archived item that is not in the window at all', () => {
@@ -102,6 +104,21 @@ describe('resurface', () => {
     expect(r.summary.recalled).toBe(recalled.length);
     // The stable prefix is untouched: everything before the appended items equals the input.
     expect(r.window.slice(0, now.length).map((i) => i.id)).toEqual(now.map((i) => i.id));
+  });
+
+  it('re-inserts recalled items on later calls so the window stays a pure extension', () => {
+    const archive = new MemoryArchive();
+    keep(build([user('earlier session about lib/db/pool.go'), assistant('noted: lib/db/pool.go leaks connections')]), {}, { archive, strict: true, call: 1 });
+    const ask = build([user('fresh start'), assistant('hello'), user('remind me about lib/db/pool.go')]);
+    const first = keep(ask, {}, { archive, strict: true, call: 2 });
+    const recalledIds = first.window.filter((i) => i.kind === 'recalled').map((i) => i.id);
+    expect(recalledIds.length).toBeGreaterThan(0);
+    // Next call: the harness sends its raw transcript plus the model's reply and a tool cycle.
+    const next = build([...ask.map((i) => ({ ...i })), assistant('pool.go leaks because...', [{ id: 'c9', name: 'read_file', input: { path: 'lib/db/pool.go' } }]), result('c9', 'contents')].map((d) => ('id' in d ? d : d)) as never);
+    const second = keep([...ask, ...next.slice(ask.length)], {}, { archive, strict: true, call: 3 });
+    const prefix = second.window.slice(0, first.window.length).map((i) => i.id);
+    expect(prefix).toEqual(first.window.map((i) => i.id));
+    expect(second.ledger.filter((e) => e.action === 'recall')).toHaveLength(0);
   });
 
   it('does nothing when the last item is not a fresh user message', () => {

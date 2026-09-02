@@ -57,7 +57,7 @@ console.log(`items       ${items.length} in, ${result.window.length} out, ${arch
 console.log(`tokens      ${fmt(s.tokensBefore)} -> ${fmt(s.tokensAfter)}  limit ${fmt(result.policy.budget.max - result.policy.budget.reserve)}  target ${fmt(result.policy.budget.target)}`);
 console.log(`trigger     ${s.budgetTripped ? 'budget tripped' : 'under budget, window untouched'}`);
 console.log(`prefix      intact through turn ${s.prefixIntactToTurn}`);
-console.log(`moved       ${s.moved}   recalled ${s.recalled}`);
+console.log(`moved       ${s.moved} new, ${s.replayed} replayed from the standing plan   recalled ${s.recalled}`);
 console.log('');
 
 const rows = result.ledger.filter((e) => e.action !== 'summary');

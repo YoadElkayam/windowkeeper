@@ -29,7 +29,7 @@ middleware, the CLI, and the proxy. `resolvePolicy()` validates it and throws a
   },
   "resurface": {
     "identifiers": true,            // match identifiers in the new user message
-    "repeatToolCalls": true,        // middleware: serve identical repeat calls from archive
+    "repeatToolCalls": false,       // serve identical repeat calls from archive; opt-in
     "maxItems": 4,
     "maxTokensEach": 2000
   },
@@ -43,12 +43,14 @@ middleware, the CLI, and the proxy. `resolvePolicy()` validates it and throws a
 
 | Stage | Runs | Changes the window? |
 |---|---|---|
-| resurface | when the last item is a fresh user message | appends recalled items; rehydrates stubs in place |
-| expire | always | items past `meta.ttl` |
-| truncate, evict, trim | only when tokens exceed `max - reserve` | in one batch, down to `target` |
+| resurface | every call; decisions are recorded per user message the first time it is seen and replayed after | inserts recalled items after the message that mentioned them; protects or rehydrates matches while that message is recent |
+| expire | every call | items past `meta.ttl` |
+| replay | every call, once a plan exists | the same drops, stubs, and truncations as the last re-plan; no new decisions |
+| truncate, evict, trim | only when the replayed window exceeds `max - reserve` | in one batch, down to `target`; the result becomes the new plan |
 
-Nothing runs while under budget except re-surfacing and expiry, so the prompt
-cache prefix is stable between triggers.
+Between re-plans every window is the previous window plus whatever the harness
+appended, so the prompt-cache prefix survives. The plan and the re-surfacing
+records live in the archive; pass the same archive on every call.
 
 ## Protection
 

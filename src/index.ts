@@ -7,7 +7,7 @@
 
 export { keep, InvariantError, type KeepOptions, type KeepResult } from './keep.js';
 export { DEFAULT_POLICY, resolvePolicy, validatePolicy, PolicyError, type Policy, type PolicyInput } from './policy.js';
-export { MemoryArchive, archiveAll, type Archive } from './archive.js';
+export { MemoryArchive, archiveAll, type Archive, type RecallRecord, type Plan } from './archive.js';
 export { Ledger, toJsonl, type LedgerEntry, type LedgerSummary, type LedgerSink, type LedgerAction } from './ledger.js';
 export { heuristicTokenizer, countItem, totalTokens, sliceByTokens, type Tokenizer } from './tokenizer.js';
 export { checkInvariants, type Violation, type InvariantInput } from './invariants.js';
@@ -24,5 +24,6 @@ export {
   handleRecall,
   type RecallOptions,
 } from './recall.js';
+export { serveFromArchive, type Served } from './serve.js';
 export type * from './types.js';
 export { isRaw, itemText, blocksText } from './types.js';

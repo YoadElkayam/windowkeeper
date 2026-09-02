@@ -28,6 +28,8 @@ export interface InvariantInput {
   ledger: LedgerEntry[];
   budgetTripped: boolean;
   expiredAny: boolean;
+  /** Ids moved by replaying the previous plan; not new decisions this call. */
+  replayed: Set<string>;
 }
 
 export function checkInvariants(x: InvariantInput): Violation[] {
@@ -104,24 +106,18 @@ export function checkInvariants(x: InvariantInput): Violation[] {
     else if (safeJson(strip(item)) !== safeJson(strip(o))) v.push({ invariant: 8, name: 'pinned', detail: `pinned ${item.id} altered` });
   }
 
-  // 9. Under budget means untouched, except re-surfacing and expiry.
+  // 9. Under budget means no new decisions: every input item is in the output in full,
+  //    or its move was a replay of the standing plan, or it was re-surfaced.
   if (!x.budgetTripped && !x.expiredAny) {
-    const core = output.filter((it) => it.kind !== 'recalled');
-    const same =
-      core.length === input.length &&
-      core.every((it, i) => {
-        const orig = input[i]!;
-        return it.id === orig.id && safeJson(strip(it)) === safeJson(strip(orig));
-      });
-    if (!same) {
-      // Rehydration replaces a stub that was already in the input; allow that.
-      const onlyRehydrated =
-        core.length === input.length &&
-        core.every((it, i) => {
-          const orig = input[i]!;
-          return it.id === orig.id || (orig.kind === 'stub' && orig.refs[0] === it.id);
-        });
-      if (!onlyRehydrated) v.push({ invariant: 9, name: 'untouched-under-budget', detail: 'window changed without a trigger' });
+    const inFull = new Map<string, Item>();
+    for (const it of output) if (it.kind !== 'stub' && it.kind !== 'recalled' && !(it.kind === 'tool_result' && it.meta.truncated)) inFull.set(it.id, it);
+    for (const item of input) {
+      if (item.kind === 'stub' || item.kind === 'recalled' || item.kind === 'view') continue;
+      const o = inFull.get(item.id);
+      if (o && safeJson(strip(o)) === safeJson(strip(item))) continue;
+      if (x.replayed.has(item.id)) continue;
+      if (item.kind === 'tool_result' && item.meta.truncated && o) continue;
+      v.push({ invariant: 9, name: 'untouched-under-budget', detail: `${item.id} changed without a trigger` });
     }
   }
 
@@ -133,7 +129,8 @@ export function checkInvariants(x: InvariantInput): Violation[] {
   }
   const ledgered = new Set(x.ledger.flatMap((e) => (e.item ? [e.item] : [])));
   for (const item of input) {
-    if (!outRefs.has(item.id) && !ledgered.has(item.id)) v.push({ invariant: 10, name: 'ledgered', detail: `${item.id} left the window without a ledger entry` });
+    if (!outRefs.has(item.id) && !ledgered.has(item.id) && !x.replayed.has(item.id))
+      v.push({ invariant: 10, name: 'ledgered', detail: `${item.id} left the window without a ledger entry` });
   }
 
   return v;

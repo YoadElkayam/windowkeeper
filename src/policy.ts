@@ -38,7 +38,11 @@ export interface Policy {
   resurface: {
     /** Match identifiers in the latest user message against the archive. */
     identifiers: boolean;
-    /** Serve an identical repeated tool call from the archive (middleware only). */
+    /**
+     * Serve an identical repeated tool call from the archive via `serveFromArchive()`.
+     * Off by default: a coding agent that re-reads a file after editing it must see
+     * the new content. Turn on for tools whose output is a pure function of their args.
+     */
     repeatToolCalls: boolean;
     /** Upper bound on items brought back per call. */
     maxItems: number;
@@ -70,7 +74,7 @@ export const DEFAULT_POLICY: Policy = {
     keepLatestPerTool: 1,
     volatile: ['bash', 'shell', 'exec', 'fetch', 'http', 'curl', 'now', 'date'],
   },
-  resurface: { identifiers: true, repeatToolCalls: true, maxItems: 4, maxTokensEach: 2000 },
+  resurface: { identifiers: true, repeatToolCalls: false, maxItems: 4, maxTokensEach: 2000 },
   cache: { batchEvictions: true },
 };
 
