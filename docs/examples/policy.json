@@ -1,0 +1,5 @@
+{
+  "budget": { "max": 6000, "target": 3500, "reserve": 500 },
+  "protect": { "recentTurns": 2 },
+  "toolResults": { "maxTokensEach": 600, "headTokens": 350, "tailTokens": 120, "evictAfterTurns": 3, "keepLatestPerTool": 1 }
+}

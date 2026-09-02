@@ -1,0 +1,66 @@
+{
+  "name": "windowkeeper",
+  "version": "0.0.1",
+  "description": "Lossless context management for AI agent harnesses. The archive is the truth, the window is a view, and the ledger says what moved where.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YoadElkayam/windowkeeper.git"
+  },
+  "homepage": "https://github.com/YoadElkayam/windowkeeper#readme",
+  "bugs": "https://github.com/YoadElkayam/windowkeeper/issues",
+  "keywords": [
+    "context-window",
+    "context-management",
+    "compaction",
+    "lossless",
+    "agents",
+    "llm",
+    "harness",
+    "anthropic",
+    "openai",
+    "ai-sdk",
+    "prompt-caching"
+  ],
+  "author": "Yoad Elkayam (https://github.com/YoadElkayam)",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./anthropic": {
+      "types": "./dist/adapters/anthropic.d.ts",
+      "import": "./dist/adapters/anthropic.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "windowkeeper": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "prepublishOnly": "pnpm clean && pnpm build && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "fast-check": "^3.23.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
