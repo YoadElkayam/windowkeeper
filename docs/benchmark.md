@@ -86,7 +86,7 @@ reproducible on any session with `bench/claude-session.mjs`.
 windowkeeper sends 7 to 13 percent more raw tokens than sliding, because it
 does not shave the window on every call. It re-plans only when the replayed
 window crosses the limit, and between re-plans each request is the previous one
-plus what the harness appended. That is why its cache reuse sits at 94 to 98
+plus what the harness appended. That is why its cache reuse sits at 93 to 98
 percent against 66 to 83 percent for the others, and why its cost-weighted
 tokens come out 2.1 to 2.8 times lower. Prompt caching turns "touch the
 transcript as rarely as possible" into the dominant cost lever.
