@@ -57,7 +57,7 @@ The comparison between strategies on the same input is what matters.
 | full | 11,287,521 | 99% | 0 | 1,258,923 | 0 | 0 | 100% (13) |
 | sliding | 4,059,476 | 66% | 48 | 1,632,622 | 258 | 258 | 92% (13) |
 | clear-tools | 4,027,848 | 67% | 51 | 1,609,907 | 131 | 131 | 100% (13) |
-| windowkeeper | 4,150,443 | 94% | 8 | 641,244 | 258 | 0 | 100% (13) |
+| windowkeeper | 4,263,407 | 93% | 7 | 697,930 | 254 | 0 | 100% (13) |
 
 ### A real Claude Code session, limit 100k, target 70k
 
@@ -88,7 +88,7 @@ does not shave the window on every call. It re-plans only when the replayed
 window crosses the limit, and between re-plans each request is the previous one
 plus what the harness appended. That is why its cache reuse sits at 94 to 98
 percent against 66 to 83 percent for the others, and why its cost-weighted
-tokens come out 2.5 to 2.8 times lower. Prompt caching turns "touch the
+tokens come out 2.1 to 2.8 times lower. Prompt caching turns "touch the
 transcript as rarely as possible" into the dominant cost lever.
 
 The `full` row is the no-limit baseline. It is cheap per token because it never

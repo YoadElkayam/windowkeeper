@@ -39,6 +39,8 @@ export function resurface(items: Item[], ctx: ReducerContext): Item[] {
   const last = items[items.length - 1];
   const freshId = last && last.kind === 'user' && archive.recallsFor(last.id) === undefined ? last.id : undefined;
   if (freshId && last?.kind === 'user') archive.rememberRecalls(freshId, matchIdentifiers(last, ctx, position));
+  let latestUserId: string | undefined;
+  for (let i = items.length - 1; i >= 0 && !latestUserId; i--) if (items[i]!.kind === 'user') latestUserId = items[i]!.id;
 
   const out: Item[] = [...items];
   const insertAfter = new Map<number, RecalledItem[]>();
@@ -50,7 +52,8 @@ export function resurface(items: Item[], ctx: ReducerContext): Item[] {
     const records = archive.recallsFor(anchor.id);
     if (!records || records.length === 0) continue;
     const fresh = anchor.id === freshId;
-    const recent = fresh || anchor.turn >= recentFrom;
+    // The latest user message always counts as recent here, whether or not its records already exist.
+    const recent = anchor.id === latestUserId || anchor.turn >= recentFrom;
 
     for (const { ref, identifier } of records) {
       const pos = position.get(ref);

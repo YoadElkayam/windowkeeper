@@ -28,7 +28,7 @@ describe('invariants (property)', () => {
           expect(a.summary.tokensAfter).toBeLessThanOrEqual(policy.budget.max - policy.budget.reserve);
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 600 },
     );
   });
 
